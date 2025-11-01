@@ -1,0 +1,18 @@
+{
+  "name": "mcp-dtcentre",
+  "version": "1.0.0",
+  "description": "Serveur MCP DTcentre pour accès Supabase (Netlify Function)",
+  "main": "functions/api.js",
+  "scripts": {
+    "build": "echo 'Netlify build'",
+    "start": "netlify dev",
+    "test": "echo \"No test specified\" && exit 0"
+  },
+  "keywords": ["mcp", "supabase", "netlify", "chatgpt"],
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.78.0"
+  }
+}
+
+
