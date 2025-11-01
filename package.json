@@ -1,15 +1,14 @@
 {
   "name": "mcp-dtcentre",
   "version": "1.0.0",
-  "description": "Serveur MCP DTcentre compatible Render",
+  "type": "module",
   "main": "functions/api.js",
   "scripts": {
     "start": "node functions/api.js"
   },
-  "keywords": ["mcp", "supabase", "render", "chatgpt"],
-  "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.8",
+    "@modelcontextprotocol/sdk": "^0.2.0",
+    "@supabase/supabase-js": "^2.78.0",
     "express": "^5.1.0"
   }
 }
