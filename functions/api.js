@@ -1,5 +1,5 @@
 // ==================================================
-// 🔹 MCP DTcentre — Version compatible ChatGPT (SSE + REST)
+// 🔹 MCP DTcentre — Version universelle (Render + Netlify + Local)
 // ==================================================
 const { createClient } = require("@supabase/supabase-js");
 
@@ -10,7 +10,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ SUPABASE_URL ou SUPABASE_KEY manquant(s) dans les variables d'environnement");
+  console.error("❌ SUPABASE_URL ou SUPABASE_KEY manquant(s)");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -25,7 +25,7 @@ const corsHeaders = {
 };
 
 // ==================================================
-// 🧠 Fonction utilitaire : manifest JSON pour ChatGPT
+// 🧠 Manifest MCP pour ChatGPT
 // ==================================================
 function buildManifest() {
   return {
@@ -39,7 +39,7 @@ function buildManifest() {
         parameters: {
           type: "object",
           properties: {
-            table: { type: "string", description: "Nom de la table (pv_lci, pv_rd, ...)" },
+            table: { type: "string", description: "Nom de la table (pv_lci, pv_rd...)" },
             column: { type: "string", description: "Colonne à agréger (agent_nom, code_natinf...)" },
             from: { type: "string", description: "Date de début (AAAA-MM-JJ)" },
             to: { type: "string", description: "Date de fin (AAAA-MM-JJ)" },
@@ -55,7 +55,7 @@ function buildManifest() {
           properties: {
             table: { type: "string", description: "Nom de la table (pv_lci ou pv_rd)" },
             agent: { type: "string", description: "Nom de l’agent ou matricule" },
-            limit: { type: "integer", description: "Nombre maximal de résultats (par défaut 100)" },
+            limit: { type: "integer", description: "Nombre maximal de résultats" },
           },
           required: ["table", "agent"],
         },
@@ -64,117 +64,83 @@ function buildManifest() {
   };
 }
 
-// --------------------------------------------------
-// 🔀 Routing simplifié (compatible Netlify)
-// --------------------------------------------------
-exports.handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") {
-      return { statusCode: 200, headers: corsHeaders, body: "" };
-    }
+// ==================================================
+// 🧩 Serveur HTTP compatible Render
+// ==================================================
+const express = require("express");
+const app = express();
+app.use(express.json());
 
-    const path = event.path.replace("/.netlify/functions/api", "") || "/";
-    const params = event.queryStringParameters || {};
+// 🔹 CORS
+app.use((req, res, next) => {
+  res.set(corsHeaders);
+  next();
+});
 
-    // ✅ Racine : santé du service
-    if (path === "/") {
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ ok: true, service: "MCP DTcentre" }),
-      };
-    }
+// ✅ Racine
+app.get("/", (req, res) => {
+  res.json({ ok: true, service: "MCP DTcentre (Render)" });
+});
 
-    // ✅ Manifest pour ChatGPT
-    if (path === "/manifest.json") {
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(buildManifest(), null, 2),
-      };
-    }
+// ✅ Manifest JSON
+app.get("/manifest.json", (req, res) => {
+  res.json(buildManifest());
+});
 
-    // ✅ Flux SSE (connexion MCP)
-    if (path === "/sse") {
-      return {
-        statusCode: 200,
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-          ...corsHeaders,
-        },
-        body: `data: ${JSON.stringify({ ok: true, connected: true, service: "MCP DTcentre" })}\n\n`,
-      };
-    }
+// ✅ Flux SSE (ChatGPT MCP)
+app.get("/sse", (req, res) => {
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ ok: true, connected: true })}\n\n`);
+});
 
-    // ✅ get_stats
-    if (path === "/get_stats") {
-      const { table, column, from, to } = params;
-      if (!table || !column)
-        return {
-          statusCode: 400,
-          headers: corsHeaders,
-          body: JSON.stringify({ error: "Paramètres requis : table, column" }),
-        };
-
-      let query = supabase.from(table).select(`${column}, date_infraction`);
-      if (from) query = query.gte("date_infraction", from);
-      if (to) query = query.lte("date_infraction", to);
-
-      const { data, error } = await query;
-      if (error)
-        return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: error.message }) };
-
-      const stats = {};
-      for (const row of data) {
-        const key = row[column] ?? "Inconnu";
-        stats[key] = (stats[key] || 0) + 1;
-      }
-
-      const out = Object.entries(stats)
-        .map(([label, total]) => ({ label, total }))
-        .sort((a, b) => b.total - a.total);
-
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ table, column, from, to, stats: out }),
-      };
-    }
-
-    // ✅ get_pv
-    if (path === "/get_pv") {
-      const { table, agent, limit } = params;
-      if (!table || !agent)
-        return {
-          statusCode: 400,
-          headers: corsHeaders,
-          body: JSON.stringify({ error: "Paramètres requis : table, agent" }),
-        };
-
-      let query = supabase.from(table).select("*").eq("agent_nom", agent);
-      if (limit) query = query.limit(parseInt(limit, 10) || 100);
-      else query = query.limit(100);
-
-      const { data, error } = await query;
-      if (error)
-        return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: error.message }) };
-
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ table, agent, count: data.length, data }),
-      };
-    }
-
-    // ❌ Inconnu
-    return {
-      statusCode: 404,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: `Unknown endpoint: ${path}` }),
-    };
-  } catch (err) {
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: String(err) }) };
+// ✅ get_stats
+app.get("/get_stats", async (req, res) => {
+  const { table, column, from, to } = req.query;
+  if (!table || !column) {
+    return res.status(400).json({ error: "Paramètres requis : table, column" });
   }
-};
+
+  let query = supabase.from(table).select(`${column}, date_infraction`);
+  if (from) query = query.gte("date_infraction", from);
+  if (to) query = query.lte("date_infraction", to);
+
+  const { data, error } = await query;
+  if (error) return res.status(400).json({ error: error.message });
+
+  const stats = {};
+  for (const row of data) {
+    const key = row[column] ?? "Inconnu";
+    stats[key] = (stats[key] || 0) + 1;
+  }
+
+  const out = Object.entries(stats)
+    .map(([label, total]) => ({ label, total }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json({ table, column, from, to, stats: out });
+});
+
+// ✅ get_pv
+app.get("/get_pv", async (req, res) => {
+  const { table, agent, limit } = req.query;
+  if (!table || !agent) {
+    return res.status(400).json({ error: "Paramètres requis : table, agent" });
+  }
+
+  let query = supabase.from(table).select("*").eq("agent_nom", agent);
+  if (limit) query = query.limit(parseInt(limit) || 100);
+  else query = query.limit(100);
+
+  const { data, error } = await query;
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ table, agent, count: data.length, data });
+});
+
+// ✅ Démarrage Render
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ MCP DTcentre prêt sur le port ${PORT}`));
