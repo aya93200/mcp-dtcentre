@@ -1,17 +1,18 @@
 {
   "name": "mcp-dtcentre",
   "version": "1.0.0",
-  "description": "Serveur MCP DTcentre pour accès Supabase (Netlify Function)",
+  "description": "Serveur MCP DTcentre pour accès Supabase (Render)",
   "main": "functions/api.js",
+  "type": "module",
   "scripts": {
-    "build": "echo 'Netlify build'",
-    "start": "netlify dev",
-    "test": "echo \"No test specified\" && exit 0"
+    "start": "node functions/api.js"
   },
-  "keywords": ["mcp", "supabase", "netlify", "chatgpt"],
+  "keywords": ["mcp", "supabase", "render", "chatgpt"],
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.78.0"
+    "@supabase/supabase-js": "^2.78.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
   }
 }
 
